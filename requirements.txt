@@ -1,0 +1,5 @@
+fitz  # PyMuPDF, bazı sistemlerde "PyMuPDF" olarak geçebilir
+sentence-transformers
+pymilvus
+fastapi
+uvicorn[standard]

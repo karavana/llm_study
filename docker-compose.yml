@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: llm_case_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      - milvus
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  milvus:
+    image: milvusdb/milvus-lite:latest
+    container_name: milvus_lite
+    ports:
+      - "19530:19530"
+    volumes:
+      - milvus_data:/var/lib/milvus
+
+volumes:
+  milvus_data:
