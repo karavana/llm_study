@@ -2,13 +2,13 @@ import os
 import fitz  # PyMuPDF
 from typing import List
 from sentence_transformers import SentenceTransformer
-from pymilvus import connections, utility, Collection, CollectionSchema, FieldSchema, DataType
+from pymilvus import connections, MilvusClient, utility, Collection, CollectionSchema, FieldSchema, DataType
 
 PDF_PATH = "data/dr_voss_diary.pdf"
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 100
 COLLECTION_NAME = "veridia_chunks"
-EMBEDDING_DIM = 768  # depends on the model
+EMBEDDING_DIM = 384 #snowflake-arctic-embed-s model produces embeddings of dimension 384
 
 
 def extract_text_from_pdf(pdf_path: str) -> str:
@@ -36,35 +36,50 @@ def embed_chunks(chunks: List[str], model_name: str = "snowflake/snowflake-arcti
     return embeddings.tolist()
 
 
-def init_milvus(collection_name: str, dim: int):
-    """Initializes connection and collection schema for Milvus."""
-    connections.connect(alias="default", uri="sqlite://:@:")
-
-    if utility.has_collection(collection_name):
-        print(f"[!] Collection '{collection_name}' already exists. Dropping and recreating...")
-        utility.drop_collection(collection_name)
-
-    fields = [
-        FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-        FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=1000),
-        FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=dim),
-    ]
-    schema = CollectionSchema(fields, description="Chunks of Veridia diary")
-    collection = Collection(name=collection_name, schema=schema)
-    collection.create_index(field_name="embedding", index_params={
-        "metric_type": "L2",
-        "index_type": "IVF_FLAT",
-        "params": {"nlist": 128}
-    })
-    collection.load()
-    return collection
 
 
-def insert_to_milvus(collection: Collection, chunks: List[str], embeddings: List[List[float]]):
-    """Inserts chunk texts and their embeddings into Milvus."""
-    entities = [chunks, embeddings]
-    insert_result = collection.insert(entities)
-    print(f"[✓] Inserted {len(insert_result.primary_keys)} records into Milvus.")
+def init_milvus_schema(collection_name: str, dim: int) -> MilvusClient:
+    # Start Milvus Lite
+    client = MilvusClient("milvus_data.db")
+
+    if client.has_collection(collection_name):
+        print(f"[!] Collection '{collection_name}' exists. Dropping...")
+        client.drop_collection(collection_name)
+
+    # Create schema
+    schema = MilvusClient.create_schema()
+    schema.add_field("chunk_id", DataType.INT64, is_primary=True, auto_id=True, description="Chunk ID")
+    schema.add_field("text", DataType.VARCHAR, max_length=2000, enable_analyzer=True, enable_match=True, description="Chunk text")
+    schema.add_field("text_dense_vector", DataType.FLOAT_VECTOR, dim=dim, description="Embedding vector")
+    
+    # Optional BM25 function (bonus)
+    # from pymilvus import Function, FunctionType
+    # bm25 = Function(
+    #     name="text_bm25",
+    #     input_field_names=["text"],
+    #     output_field_names=["text_sparse_vector"],
+    #     function_type=FunctionType.BM25,
+    # )
+    # schema.add_field("text_sparse_vector", DataType.SPARSE_FLOAT_VECTOR)
+    # schema.add_function(bm25)
+
+    client.create_collection(
+        collection_name=collection_name,
+        schema=schema,
+        consistency_level="Strong",
+        enable_dynamic_field=False,
+        overwrite=True
+    )
+
+    return client
+
+
+def insert_chunks(client: MilvusClient, collection_name: str, chunks: List[str], embeddings: List[List[float]]):
+    records = [{"text": t, "text_dense_vector": vec} for t, vec in zip(chunks, embeddings)]
+    client.insert(collection_name=collection_name, data=records)
+    print(f"[✓] Inserted {len(records)} chunks.")
+
+
 
 
 def main():
@@ -78,8 +93,8 @@ def main():
     embeddings = embed_chunks(chunks)
 
     print("[*] Initializing Milvus and inserting embeddings...")
-    collection = init_milvus(COLLECTION_NAME, EMBEDDING_DIM)
-    insert_to_milvus(collection, chunks, embeddings)
+    client = init_milvus_schema(COLLECTION_NAME, EMBEDDING_DIM)
+    insert_chunks(client, COLLECTION_NAME, chunks, embeddings)
 
     print("[✅] Data preparation pipeline completed.")
 

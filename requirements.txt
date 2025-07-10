@@ -1,4 +1,4 @@
-fitz  # PyMuPDF, bazı sistemlerde "PyMuPDF" olarak geçebilir
+fitz
 sentence-transformers
 pymilvus
 fastapi

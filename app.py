@@ -2,61 +2,62 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
 from sentence_transformers import SentenceTransformer
-from pymilvus import connections, Collection
+from pymilvus import MilvusClient
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
+from contextlib import asynccontextmanager
 
 # === CONFIGURATION ===
 MILVUS_COLLECTION = "veridia_chunks"
 EMBEDDING_MODEL = "snowflake/snowflake-arctic-embed-s"
-LLM_MODEL = "mistralai/Mistral-7B-Instruct-v0.1"  # küçük bir LLM önerisi
+LLM_MODEL = "HuggingFaceH4/zephyr-7b-beta"  # accessible & high-quality
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-TOP_K = 5  # Milvus'tan kaç benzer chunk çekilecek
+TOP_K = 5  
 
-# === INIT FASTAPI ===
-app = FastAPI(title="RAG System for Veridia")
 
 # === MODELS ===
+models = {}
 class QueryRequest(BaseModel):
     question: str
-
+    
 # === LOAD MODELS ON STARTUP ===
-@app.on_event("startup")
-def load_models():
-    global embed_model, llm_tokenizer, llm_model, milvus_collection
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load models on startup
+    print("[*] Loading models and starting Milvus Lite...")
+    models["milvus_client"] = MilvusClient("milvus_data.db")
+    models["embed_model"] = SentenceTransformer(EMBEDDING_MODEL)
+    models["llm_tokenizer"] = AutoTokenizer.from_pretrained(LLM_MODEL)
+    models["llm_model"] = AutoModelForCausalLM.from_pretrained(LLM_MODEL).to(DEVICE)
+    print("[✓] All models loaded and Milvus Lite is running.")
+    
+    yield
+    
+    # Clean up models on shutdown
+    print("[*] Clearing models...")
+    models.clear()
 
-    # Connect Milvus
-    connections.connect(alias="default", uri="sqlite://:@:")
-    milvus_collection = Collection(MILVUS_COLLECTION)
-    milvus_collection.load()
+# === INIT FASTAPI ===
+app = FastAPI(title="RAG System for Veridia", lifespan=lifespan)
 
-    # Embedding model
-    embed_model = SentenceTransformer(EMBEDDING_MODEL)
-
-    # LLM
-    llm_tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL)
-    llm_model = AutoModelForCausalLM.from_pretrained(LLM_MODEL).to(DEVICE)
-
-    print("[✓] All models and DB connections are ready.")
 
 # === UTILITIES ===
 def embed_question(question: str) -> List[float]:
     return embed_model.encode([question], convert_to_numpy=True).tolist()[0]
 
 def retrieve_context(query_embedding: List[float]) -> List[str]:
-    search_params = {
-        "data": [query_embedding],
-        "anns_field": "embedding",
-        "param": {"metric_type": "L2", "params": {"nprobe": 10}},
-        "limit": TOP_K,
-        "output_fields": ["text"],
-    }
-    results = milvus_collection.search(**search_params)
-    return [hit.entity.get("text") for hit in results[0]]
+    results = milvus_client.search(
+        collection_name=MILVUS_COLLECTION, 
+        data=[query_embedding],
+        limit=TOP_K,
+        output_fields=["text"],
+    )
+    return [hit['entity']['text'] for hit in results[0]]
 
 def generate_answer(context_chunks: List[str], question: str) -> str:
     context_text = "\n".join(context_chunks)
-    prompt = f"""You are an expert on the world of Veridia.
+
+    prompt = f"""You are an expert on the world of Veridia. Use the provided context to answer the question accurately and concisely.
 
 Context:
 {context_text}
@@ -65,9 +66,25 @@ Question: {question}
 Answer:"""
 
     inputs = llm_tokenizer(prompt, return_tensors="pt").to(DEVICE)
-    outputs = llm_model.generate(**inputs, max_new_tokens=300, do_sample=True)
-    answer = llm_tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return answer.split("Answer:")[-1].strip()
+    
+    outputs = llm_model.generate(
+        **inputs,
+        max_new_tokens=100,
+        do_sample=True,
+        temperature=0.7,
+        eos_token_id=llm_tokenizer.eos_token_id
+    )
+
+    full_output = llm_tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    # Try to extract only the part after the original prompt
+    generated_text = full_output[len(prompt):].strip()
+
+    # Optional: return just the first line (short-form answer)
+    first_line = generated_text.split("\n")[0].strip()
+
+    return first_line
+
 
 # === ENDPOINT ===
 @app.post("/query")

@@ -9,12 +9,13 @@ RUN apt-get update && apt-get install -y \
 # Working directory
 WORKDIR /app
 
-# Needed files
-COPY . .
-
-# Python dependencies
+# Install Python deps separately to enable caching
+COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest
+COPY . .
 
 # FastAPI port
 EXPOSE 8000
