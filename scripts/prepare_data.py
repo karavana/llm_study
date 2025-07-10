@@ -38,7 +38,7 @@ def embed_chunks(chunks: List[str], model_name: str = "snowflake/snowflake-arcti
 
 def init_milvus(collection_name: str, dim: int):
     """Initializes connection and collection schema for Milvus."""
-    connections.connect("default", host="localhost", port="19530")
+    connections.connect(alias="default", uri="sqlite://:@:")
 
     if utility.has_collection(collection_name):
         print(f"[!] Collection '{collection_name}' already exists. Dropping and recreating...")

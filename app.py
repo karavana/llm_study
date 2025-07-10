@@ -26,7 +26,7 @@ def load_models():
     global embed_model, llm_tokenizer, llm_model, milvus_collection
 
     # Connect Milvus
-    connections.connect("default", host="milvus", port="19530")
+    connections.connect(alias="default", uri="sqlite://:@:")
     milvus_collection = Collection(MILVUS_COLLECTION)
     milvus_collection.load()
 
