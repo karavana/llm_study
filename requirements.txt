@@ -1,4 +1,4 @@
-fitz
+PyMuPDF>=1.22
 sentence-transformers
 pymilvus
 fastapi

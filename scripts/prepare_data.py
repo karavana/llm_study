@@ -1,5 +1,5 @@
 import os
-import fitz  # PyMuPDF
+import pymupdf
 from typing import List
 from sentence_transformers import SentenceTransformer
 from pymilvus import connections, MilvusClient, utility, Collection, CollectionSchema, FieldSchema, DataType
@@ -13,7 +13,7 @@ EMBEDDING_DIM = 384 #snowflake-arctic-embed-s model produces embeddings of dimen
 
 def extract_text_from_pdf(pdf_path: str) -> str:
     """Extracts text from a PDF file."""
-    with fitz.open(pdf_path) as doc:
+    with pymupdf.open(pdf_path) as doc:
         text = "\n".join(page.get_text() for page in doc)
     return text
 

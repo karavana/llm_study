@@ -7,10 +7,11 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 from contextlib import asynccontextmanager
 
+
 # === CONFIGURATION ===
 MILVUS_COLLECTION = "veridia_chunks"
 EMBEDDING_MODEL = "snowflake/snowflake-arctic-embed-s"
-LLM_MODEL = "HuggingFaceH4/zephyr-7b-beta"  # accessible & high-quality
+LLM_MODEL = "TinyLlama/TinyLlama-1.1B-Chat-v1.0" #"meta-llama/Llama-3.2-1B" # I was never able to get the access to this
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 TOP_K = 5  
 
@@ -19,10 +20,18 @@ TOP_K = 5
 models = {}
 class QueryRequest(BaseModel):
     question: str
-    
+
 # === LOAD MODELS ON STARTUP ===
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import os
+    from huggingface_hub import login
+
+    token = os.getenv("HF_TOKEN")
+    if not token:
+        raise RuntimeError("HF_TOKEN not found in environment!")
+    login(token=token)
+
     # Load models on startup
     print("[*] Loading models and starting Milvus Lite...")
     models["milvus_client"] = MilvusClient("milvus_data.db")
