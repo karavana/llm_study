@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 # === CONFIGURATION ===
 MILVUS_COLLECTION = "veridia_chunks"
 EMBEDDING_MODEL = "snowflake/snowflake-arctic-embed-s"
-LLM_MODEL = "TinyLlama/TinyLlama-1.1B-Chat-v1.0" #"meta-llama/Llama-3.2-1B" # I was never able to get the access to this
+LLM_MODEL = "TinyLlama/TinyLlama-1.1B-Chat-v1.0" #"meta-llama/Llama-3.2-1B" # I was rejected when I asked to use this model; Your request to access this repo has been rejected by the repo's authors.
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 TOP_K = 5  
 
@@ -24,13 +24,15 @@ class QueryRequest(BaseModel):
 # === LOAD MODELS ON STARTUP ===
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    # The below snippet would have worked if we could have used llama-3.2-1B
     import os
     from huggingface_hub import login
 
     token = os.getenv("HF_TOKEN")
     if not token:
         raise RuntimeError("HF_TOKEN not found in environment!")
-    login(token=token)
+    login(token=token)"""
 
     # Load models on startup
     print("[*] Loading models and starting Milvus Lite...")

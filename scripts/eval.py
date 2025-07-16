@@ -6,7 +6,7 @@ import time
 from typing import List
 
 # --- CONFIGURATION ---
-API_URL = "http://127.0.0.1:8000/query"
+API_URL = "http://localhost:8000/query"
 QUESTIONS_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'questions.txt')
 ANSWERS_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'answers.txt')
 
