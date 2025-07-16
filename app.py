@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
 
     # Load models on startup
     print("[*] Loading models and starting Milvus Lite...")
-    models["milvus_client"] = MilvusClient("milvus_data.db")
+    models["milvus_client"] = MilvusClient("milvus/milvus_data.db")
     models["embed_model"] = SentenceTransformer(EMBEDDING_MODEL)
     models["llm_tokenizer"] = AutoTokenizer.from_pretrained(LLM_MODEL)
     models["llm_model"] = AutoModelForCausalLM.from_pretrained(LLM_MODEL).to(DEVICE)
@@ -51,13 +51,12 @@ async def lifespan(app: FastAPI):
 # === INIT FASTAPI ===
 app = FastAPI(title="RAG System for Veridia", lifespan=lifespan)
 
-
 # === UTILITIES ===
 def embed_question(question: str) -> List[float]:
-    return embed_model.encode([question], convert_to_numpy=True).tolist()[0]
+    return models["embed_model"].encode([question], convert_to_numpy=True).tolist()[0]
 
 def retrieve_context(query_embedding: List[float]) -> List[str]:
-    results = milvus_client.search(
+    results = models["milvus_client"].search(
         collection_name=MILVUS_COLLECTION, 
         data=[query_embedding],
         limit=TOP_K,
@@ -76,34 +75,47 @@ Context:
 Question: {question}
 Answer:"""
 
-    inputs = llm_tokenizer(prompt, return_tensors="pt").to(DEVICE)
-    
-    outputs = llm_model.generate(
-        **inputs,
-        max_new_tokens=100,
-        do_sample=True,
-        temperature=0.7,
-        eos_token_id=llm_tokenizer.eos_token_id
-    )
+    try:
+        print("[DEBUG] Generating answer with prompt:")
+        print(prompt)
+        inputs = models["llm_tokenizer"](prompt, return_tensors="pt").to(DEVICE)
 
-    full_output = llm_tokenizer.decode(outputs[0], skip_special_tokens=True)
+        outputs = models["llm_model"].generate(
+            **inputs,
+            max_new_tokens=100,
+            do_sample=True,
+            temperature=0.7,
+            eos_token_id=models["llm_tokenizer"].eos_token_id
+        )
 
-    # Try to extract only the part after the original prompt
-    generated_text = full_output[len(prompt):].strip()
+        full_output = models["llm_tokenizer"].decode(outputs[0], skip_special_tokens=True)
+        generated_text = full_output[len(prompt):].strip()
+        first_line = generated_text.split("\n")[0].strip()
+        return first_line
 
-    # Optional: return just the first line (short-form answer)
-    first_line = generated_text.split("\n")[0].strip()
-
-    return first_line
+    except Exception as e:
+        print("[ERROR in generate_answer]", e)
+        raise
 
 
 # === ENDPOINT ===
 @app.post("/query")
 def query_rag(request: QueryRequest):
     try:
+        print(f"[REQUEST] Question: {request.question}")
         q_embed = embed_question(request.question)
+        print("[DEBUG] Got embedding")
         context_chunks = retrieve_context(q_embed)
+        print("[DEBUG] Retrieved context (len={}):".format(len(context_chunks)))
+        for idx, c in enumerate(context_chunks):
+            print(f"[DEBUG] Chunk {idx+1}:\n{c[:200]}...")
+
         answer = generate_answer(context_chunks, request.question)
+        print("[RESPONSE] Answer:", answer)
         return {"answer": answer}
+
     except Exception as e:
+        import traceback
+        print("[ERROR] Exception occurred:")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
