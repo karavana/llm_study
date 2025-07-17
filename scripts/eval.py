@@ -103,9 +103,9 @@ Your response MUST be a single word: either "CORRECT" or "INCORRECT".
         
         print(f"    -> Judge: Gemini says '{decision}'")
 
-        if "CORRECT" in decision:
+        if "CORRECT" == decision:
             return True
-        elif "INCORRECT" in decision:
+        elif "INCORRECT" == decision:
             return False
         else:
             print("    -> Judge: [!] Warning: Unexpected response from judge. Defaulting to INcorrect.")
@@ -157,8 +157,9 @@ def main():
         print(f"  > Expected Answer:  {expected_answer}")
         print(f"  > Generated Answer: {generated_answer}")
         print(f"  > Time Taken: {elapsed_time:.2f}s")
-
-        if is_correct_llm_judge(question, generated_answer, expected_answer):
+        result = is_correct_llm_judge(question, generated_answer, expected_answer)
+        print(result)
+        if result:
             print("  > Result: [✓] Correct")
             correct_predictions += 1
         else:
