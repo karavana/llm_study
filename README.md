@@ -79,15 +79,15 @@ INFO:     Uvicorn running on http://0.0.0.0:8000(Press CTRL+C to quit)
 curl -X POST http://localhost:8000/query -H "Content-Type: application/json" -d "{\"question\":\"What is the Veridian policy towards space colonization?\"}"
   - If we want to test every question in the questions.txt set, then;
 		1. In the first CMD (the one we prepared the data), we should be already in the llm_study-main folder and we simply call;
-		‘python scripts/eval.py’
+		'python scripts/eval.py'
 		and it will start evaluating "based on string matching techniques". Fortunately, our eval.py is equipped with a better evaluation criteria; LLM-as-a-judge.
 		In order to use this though, Gemini gives free API KEYs but its quota is limited (we can obtain it from https://aistudio.google.com/apikey and click
 		"Create API Key"). After obtaining our key, we have to set it in our environment for safe access. Just do;
 		setx GOOGLE_API_KEY "your api key"
-		and it should be set in your environment.
-		After this, we can again do
-		python scripts/eval.py
-		and it will start using Gemini as a judge, which can evaluate our answers more fairly. We can only evaluate half of the answers before we exhaust our quota. 
+		and it should be set in the environment.
+		After this, we can safely do
+		'python scripts/eval.py'
+		and it will start using Gemini as a judge, which can evaluate our answers more fairly. We can only evaluate half of the answers before we exhaust our quota, though. 
 
 
 
