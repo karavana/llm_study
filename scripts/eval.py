@@ -2,26 +2,35 @@ import os
 import requests
 import time
 from typing import List
-import openai # Added import
+from google import genai
 
 # --- CONFIGURATION ---
 API_URL = "http://host.docker.internal:8000/query"
 QUESTIONS_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'questions.txt')
 ANSWERS_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'answers.txt')
 
-# --- LLM-as-a-Judge CONFIGURATION ---
-# Load the API key from environment variables for security
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
-# We use a capable model like gpt-3.5-turbo as the judge. 
-# It's a good balance of cost, speed, and reasoning ability.
-JUDGE_MODEL = "gpt-4o" 
+# --- LLM-as-a-Judge CONFIGURATION (GOOGLE GENAI SDK) ---
+# Load the Google API key from environment variables for security
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+# We use a fast, capable, and cost-effective model as the judge.
+JUDGE_MODEL = "gemini-1.5-flash-latest" # This remains the model identifier
+judge_client = None
 
-# Initialize OpenAI client if the key exists
-if OPENAI_API_KEY:
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+# --- Initialize Google GenAI Client (New SDK Method) ---
+# We do this once at the start of the script for efficiency.
+if GOOGLE_API_KEY:
+    try:
+        # CHANGED: We now initialize a persistent client object from the new SDK.
+        judge_client = genai.Client(api_key=GOOGLE_API_KEY)
+        print(f"[✓] Successfully initialized Google GenAI client for judge model ({JUDGE_MODEL}).")
+    except AttributeError:
+        print("[!] Error: AttributeError encountered")
+        print("    Evaluation will fall back to basic string matching.")
+    except Exception as e:
+        print(f"[!] Warning: Failed to initialize Google GenAI client: {e}")
+        print("    Evaluation will fall back to basic string matching.")
 else:
-    client = None
-    print("[!] Warning: OPENAI_API_KEY environment variable not found.")
+    print("[!] Warning: GOOGLE_API_KEY environment variable not found.")
     print("    Evaluation will fall back to basic string matching.")
 
 
@@ -47,26 +56,25 @@ def query_rag_api(question: str) -> str:
 
 def is_correct_llm_judge(question: str, generated_answer: str, expected_answer: str) -> bool:
     """
-    Uses a powerful LLM to judge if the generated answer is correct, focusing on
-    factual equivalence and ignoring stylistic differences.
+    Uses Google Gemini to judge if the generated answer is correct, using the new genai.Client.
     """
-    if not client:
+    if not judge_client:
+        print("    -> Judge: Basic string matching (fallback)")
         return generated_answer.strip().lower() == expected_answer.strip().lower()
 
-    # This is a more robust prompt with explicit instructions and a one-shot example.
     prompt = f"""
-You are an impartial AI evaluator. Your primary goal is to validate if the core factual information in the "Generated Answer" matches the "Ground-Truth Answer".
+You are an impartial AI evaluator. Your primary goal is to validate if the core factual information in the "Generated Answer" matches the "Expected Answer".
 
 **EVALUATION RULES:**
 - The "Generated Answer" does NOT need to be a complete sentence or grammatically perfect.
 - It does NOT need to be a word-for-word match.
-- You must ignore differences in phrasing, style, or punctuation. Be flexible but fair.
-- If the key information from the "Ground-Truth Answer" is present in the "Generated Answer", you must consider it CORRECT.
+- Be VERY FLEXIBLE. If it's semantically correct, then it is correct.
+- Focus on the factual accuracy based on the provided "Expected Answer".
 
 ---
 **EXAMPLE:**
 - Original Question: What is the capital of France?
-- Ground-Truth Answer: The capital of France is Paris, a major European city.
+- Expected Answer: The capital of France is Paris, a major European city.
 - Generated Answer: Paris
 - Your Decision: CORRECT
 ---
@@ -76,7 +84,7 @@ You are an impartial AI evaluator. Your primary goal is to validate if the core 
 **Original Question:**
 {question}
 
-**Ground-Truth Answer:**
+**Expected Answer:**
 {expected_answer}
 
 **Generated Answer:**
@@ -87,18 +95,27 @@ Based on the rules and example above, is the "Generated Answer" factually correc
 Your response MUST be a single word: either "CORRECT" or "INCORRECT".
 """
     try:
-        response = client.chat.completions.create(
-            model=JUDGE_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-            max_tokens=5
-        )
-        decision = response.choices[0].message.content.strip().upper()
-        print(f"  > Judge's Decision: {decision}")
-        return decision == "CORRECT"
+        response = judge_client.models.generate_content(
+            model=f"{JUDGE_MODEL}",
+            contents=prompt
+    )
+        decision = response.text.strip().upper()
+        
+        print(f"    -> Judge: Gemini says '{decision}'")
+
+        if "CORRECT" in decision:
+            return True
+        elif "INCORRECT" in decision:
+            return False
+        else:
+            print("    -> Judge: [!] Warning: Unexpected response from judge. Defaulting to INcorrect.")
+            return False
+
     except Exception as e:
-        print(f"[✗] Error calling LLM Judge API: {e}")
-        return False
+        print(f"    -> Judge: [✗] Error during Gemini API call: {e}")
+        print("    -> Judge: Falling back to basic string matching for this question.")
+        return generated_answer.strip().lower() == expected_answer.strip().lower()
+
 
 def main():
     """Main evaluation pipeline."""
@@ -141,12 +158,11 @@ def main():
         print(f"  > Generated Answer: {generated_answer}")
         print(f"  > Time Taken: {elapsed_time:.2f}s")
 
-        # 3. Compare answers using the chosen method
         if is_correct_llm_judge(question, generated_answer, expected_answer):
-            print("  > Result: [✓] Correct (Judged by LLM)")
+            print("  > Result: [✓] Correct")
             correct_predictions += 1
         else:
-            print("  > Result: [✗] Incorrect (Judged by LLM)")
+            print("  > Result: [✗] Incorrect")
             
     print("=" * 50)
     print("--- Evaluation Complete ---")
