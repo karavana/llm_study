@@ -1,3 +1,4 @@
 .env*
+.pkl
 milvus_data*
 .milvus_data*
