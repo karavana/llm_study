@@ -1,106 +1,128 @@
 import os
+import uuid
+import dill
 from typing import List
 from sentence_transformers import SentenceTransformer
 from pymilvus import MilvusClient, DataType
 
-# --- LANGCHAIN INTEGRATION ---
+# --- LANGCHAIN IMPORTS ---
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.schema import Document
 
-# --- CONFIGURATION (Adjusted for smarter chunking) ---
+# --- CONFIGURATION ---
 PDF_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'dr_voss_diary.pdf')
-MILVUS_DB_PATH = "milvus/milvus_data.db" 
-COLLECTION_NAME = "veridia_chunks"
+MILVUS_DB_PATH = "milvus/milvus_data.db"
+PARENT_DOCS_STORE_PATH = "milvus/parent_docs.pkl" # File to store parent chunks
+COLLECTION_NAME = "veridia_retriever_chunks" # New name to avoid confusion
 EMBEDDING_MODEL_NAME = "snowflake/snowflake-arctic-embed-s"
 EMBEDDING_DIM = 384  
-CHUNK_SIZE = 1000 
-CHUNK_OVERLAP = 150 
 
+# --- YOUR MANUAL MILVUS FUNCTIONS (WITH ONE IMPORTANT MODIFICATION) ---
 
-def embed_chunks(chunks: List[str], model_name: str = EMBEDDING_MODEL_NAME) -> List[List[float]]:
-    """Generates embeddings for each chunk. (This function remains the same)."""
+def embed_texts(texts: List[str], model_name: str = EMBEDDING_MODEL_NAME) -> List[List[float]]:
+    """Generates embeddings for a list of texts."""
     model = SentenceTransformer(model_name)
-    embeddings = model.encode(chunks, show_progress_bar=True, convert_to_numpy=True)
+    embeddings = model.encode(texts, show_progress_bar=True, convert_to_numpy=True)
     return embeddings.tolist()
 
 def init_milvus_collection(client: MilvusClient, collection_name: str, dim: int):
-    """Creates a new Milvus collection. (This function remains the same)."""
+    """Creates a new Milvus collection with a schema for the ParentDocumentRetriever."""
     if client.has_collection(collection_name):
         print(f"[!] Collection '{collection_name}' exists. Dropping...")
         client.drop_collection(collection_name)
 
     schema = MilvusClient.create_schema(auto_id=True, enable_dynamic_field=False)
-    # Corrected schema field names for clarity and consistency
-    schema.add_field("id", DataType.INT64, is_primary=True, description="Primary key")
-    schema.add_field("text", DataType.VARCHAR, max_length=2000, description="Chunk text")
-    schema.add_field("embedding", DataType.FLOAT_VECTOR, dim=dim, description="Embedding vector")
+    schema.add_field("id", DataType.INT64, is_primary=True)
+    # This field will store the ID of the parent document
+    schema.add_field("doc_id", DataType.VARCHAR, max_length=36) 
+    schema.add_field("text", DataType.VARCHAR, max_length=2000)
+    schema.add_field("embedding", DataType.FLOAT_VECTOR, dim=dim)
 
-    client.create_collection(
-        collection_name=collection_name,
-        schema=schema,
-        consistency_level="Strong"
-    )
+    client.create_collection(collection_name=collection_name, schema=schema, consistency_level="Strong")
     print(f"[✓] Collection '{collection_name}' created.")
-
-def insert_chunks(client: MilvusClient, collection_name: str, chunks: List[str], embeddings: List[List[float]]):
-    """Inserts chunks and their embeddings into the collection. (This function remains the same)."""
-    records = [{"text": t, "embedding": vec} for t, vec in zip(chunks, embeddings)]
+    
+def insert_child_docs(client: MilvusClient, collection_name: str, child_docs: List[Document]):
+    """Embeds and inserts child documents with their parent's ID into Milvus."""
+    # Extract text for embedding
+    texts_to_embed = [doc.page_content for doc in child_docs]
+    print(f"[*] Generating embeddings for {len(texts_to_embed)} child documents...")
+    embeddings = embed_texts(texts_to_embed)
+    
+    # Prepare records with text, embedding, and parent doc_id from metadata
+    records = [
+        {
+            "doc_id": doc.metadata['doc_id'],
+            "text": doc.page_content,
+            "embedding": vec
+        } 
+        for doc, vec in zip(child_docs, embeddings)
+    ]
+    
     client.insert(collection_name=collection_name, data=records)
-    print(f"[✓] Inserted {len(records)} chunks.")
-
+    print(f"[✓] Inserted {len(records)} child documents into Milvus.")
 
 def create_milvus_index(client: MilvusClient, collection_name: str):
-    """Creates an index on the vector field. (This function remains the same)."""
+    """Creates an index on the vector field."""
     print("[*] Creating index on the vector field...")
     index_params = client.prepare_index_params()
-    index_params.add_index(
-        field_name="embedding",
-        index_type="AUTOINDEX",
-        metric_type="L2"
-    )
+    index_params.add_index(field_name="embedding", index_type="AUTOINDEX", metric_type="L2")
     client.create_index(collection_name=collection_name, index_params=index_params)
     print("[✓] Index created successfully.")
 
 
 def main():
-    """Main data preparation pipeline using the Hybrid Approach."""
-    # 1. Start Milvus Lite client (Your working manual code)
+    """Main data preparation pipeline for the ParentDocumentRetriever."""
+    # 1. Initialize Milvus Lite client
     client = MilvusClient(MILVUS_DB_PATH)
-
-    # 2. Initialize Milvus collection (Your working manual code)
-    print("[*] Initializing Milvus collection...")
     init_milvus_collection(client, COLLECTION_NAME, EMBEDDING_DIM)
 
-    # 3. Load Document with LangChain (Replaces extract_text_from_pdf)
+    # 2. Load the raw documents from PDF
     print(f"[*] Loading document from: {PDF_PATH}")
     loader = PyMuPDFLoader(PDF_PATH)
-    documents = loader.load()
+    raw_docs = loader.load()
 
-    # 4. Split Text with LangChain (Replaces your old chunk_text function)
-    print("[*] Splitting text with LangChain's RecursiveCharacterTextSplitter...")
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP,
-        length_function=len,
-    )
-    split_docs = text_splitter.split_documents(documents)
-    # We need a simple list of strings for our manual embedding function
-    chunks = [doc.page_content for doc in split_docs]
-    print(f"[✓] Created {len(chunks)} semantically-split chunks.")
+    # 3. Define the parent and child splitters
+    parent_splitter = RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap=200)
+    child_splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
 
-    # 5. Generate Embeddings (Your working manual code)
-    print(f"[*] Generating embeddings for {len(chunks)} chunks...")
-    embeddings = embed_chunks(chunks)
+    # 4. Generate and link parent/child documents
+    print("[*] Generating parent and child chunks...")
+    parent_docs = []
+    child_docs = []
+    
+    # Split the raw documents into large "parent" chunks
+    parent_chunks = parent_splitter.split_documents(raw_docs)
 
-    # 6. Insert Data into Milvus (Your working manual code)
-    print("[*] Inserting data into Milvus...")
-    insert_chunks(client, COLLECTION_NAME, chunks, embeddings)
+    for parent_chunk in parent_chunks:
+        # Assign a unique ID to each parent chunk
+        doc_id = str(uuid.uuid4())
+        parent_chunk.metadata['doc_id'] = doc_id
+        parent_docs.append(parent_chunk)
+        
+        # Split the parent chunk into smaller "child" chunks
+        sub_docs = child_splitter.split_documents([parent_chunk])
+        
+        # Add the parent's ID to each child's metadata
+        for sub_doc in sub_docs:
+            sub_doc.metadata['doc_id'] = doc_id
+        
+        child_docs.extend(sub_docs)
 
-    # 7. Create Index (Your working manual code)
+    print(f"[✓] Created {len(parent_docs)} parent chunks and {len(child_docs)} child chunks.")
+
+    # 5. Save the parent documents to disk for the API to use
+    print(f"[*] Saving {len(parent_docs)} parent documents to '{PARENT_DOCS_STORE_PATH}'...")
+    with open(PARENT_DOCS_STORE_PATH, "wb") as f:
+        dill.dump(parent_docs, f)
+
+    # 6. Insert the CHILD documents into Milvus
+    insert_child_docs(client, COLLECTION_NAME, child_docs)
+    
+    # 7. Create the index for efficient searching
     create_milvus_index(client, COLLECTION_NAME)
 
-    print("\n[✅] Hybrid data preparation pipeline completed successfully!")
-
+    print("\n[✅] Parent-Child data preparation pipeline completed successfully!")
 
 if __name__ == "__main__":
     main()

@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 
 
 # === CONFIGURATION ===
-MILVUS_COLLECTION = "veridia_chunks"
+MILVUS_COLLECTION = "veridia_retriever_chunks"
 EMBEDDING_MODEL = "snowflake/snowflake-arctic-embed-s"
 LLM_MODEL = "TinyLlama/TinyLlama-1.1B-Chat-v1.0" #"meta-llama/Llama-3.2-1B" # I was rejected when I asked to use this model; Your request to access this repo has been rejected by the repo's authors.
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -86,7 +86,7 @@ Answer:"""
             **inputs,
             max_new_tokens=100,
             do_sample=True,
-            temperature=0.7,
+            temperature=0.1,
             eos_token_id=models["llm_tokenizer"].eos_token_id
         )
 
