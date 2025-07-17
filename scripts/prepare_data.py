@@ -1,5 +1,4 @@
 import os
-import pymupdf # Still needed by the loader
 from typing import List
 from sentence_transformers import SentenceTransformer
 from pymilvus import MilvusClient, DataType
@@ -14,8 +13,8 @@ MILVUS_DB_PATH = "milvus/milvus_data.db"
 COLLECTION_NAME = "veridia_chunks"
 EMBEDDING_MODEL_NAME = "snowflake/snowflake-arctic-embed-s"
 EMBEDDING_DIM = 384  
-CHUNK_SIZE = 1200 
-CHUNK_OVERLAP = 180 
+CHUNK_SIZE = 1000 
+CHUNK_OVERLAP = 150 
 
 
 def embed_chunks(chunks: List[str], model_name: str = EMBEDDING_MODEL_NAME) -> List[List[float]]:
