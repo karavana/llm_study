@@ -3,3 +3,5 @@ sentence-transformers
 pymilvus
 fastapi
 uvicorn[standard]
+langchain
+langchain-community
