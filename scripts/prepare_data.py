@@ -9,7 +9,7 @@ PDF_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'dr_voss_diary.
 MILVUS_DB_PATH = "milvus/milvus_data.db" 
 COLLECTION_NAME = "veridia_chunks"
 EMBEDDING_DIM = 384  
-CHUNK_SIZE = 500
+CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 100
 
 def extract_text_from_pdf(pdf_path: str) -> str:

@@ -3,3 +3,4 @@ sentence-transformers
 pymilvus
 fastapi
 uvicorn[standard]
+openai

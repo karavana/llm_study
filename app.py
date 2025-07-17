@@ -67,7 +67,9 @@ def retrieve_context(query_embedding: List[float]) -> List[str]:
 def generate_answer(context_chunks: List[str], question: str) -> str:
     context_text = "\n".join(context_chunks)
 
-    prompt = f"""You are an expert on the world of Veridia. Use the provided context to answer the question accurately and concisely.
+    prompt = f"""Answer the question using ONLY A DIRECT QUOTE from the provided context. 
+Do NOT summarize or paraphrase.
+Return EXACTLY ONE and ONLY ONE sentence that directly answers the question.
 
 Context:
 {context_text}
