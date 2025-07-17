@@ -69,11 +69,7 @@ def generate_answer(context_chunks: List[str], question: str) -> str:
 
     prompt = f"""Answer the question using ONLY A DIRECT QUOTE from the provided context. 
 Do NOT summarize or paraphrase.
-Return EXACTLY ONE and ONLY ONE sentence that directly answers the question.
-Example:
-- Original Question: What is the capital of France?
-- Expected Answer: The capital of France is Paris.
-- DO NOT simply answer with: Paris
+Return EXACTLY ONE and ONLY ONE "COMPLETE" sentence that directly answers the question.
 
 Context:
 {context_text}
