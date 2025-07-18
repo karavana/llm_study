@@ -50,7 +50,7 @@ llm_case_study/
 		1. open a CMD (do not close it, we are going to use it in the other steps)
 		2. type; pip install google-genai
 				 pip install requests
-		3. extract the ZIP file I have sent as an attachment
+		3. extract the ZIP file I have sent as an attachment (llm_study-main.zip)
   - Thanks to the YAML and Dockerfile configurations, we are just going to;
 		1. Open the docker application as admin
 		2. In the first CMD we opened, change the current directory into the folder llm_study-main (the one we extracted from ZIP)
