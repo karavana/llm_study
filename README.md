@@ -10,12 +10,12 @@ llm_case_study/
 │   ├── answers.txt         # Answers to the questions, for evaluation/testing purposes
 │   └── ...                 # Any other data files you create in your pipeline can go here
 ├── scripts/
-│   ├── prepare_data.py     # Document processing pipeline (TO BE IMPLEMENTED)
-│   └── eval.py             # Evaluation pipeline (TO BE IMPLEMENTED)
+│   ├── prepare_data.py     # Document processing pipeline (IMPLEMENTED)
+│   └── eval.py             # Evaluation pipeline (IMPLEMENTED)
 ├── src/                    # Your custom modules and packages go here (OPTIONAL)
 │   └── ...
-├── app.py                  # FastAPI server implementation (TO BE IMPLEMENTED)
-├── README.md               # Project documentation (TO BE UPDATED)
+├── app.py                  # FastAPI server implementation (IMPLEMENTED)
+├── README.md               # Project documentation (UPDATED)
 └── ...                     # Any other files your project needs
 ```
 
@@ -27,8 +27,8 @@ llm_case_study/
 - **Vector Database:** Milvus Lite (required)
 - **API Framework:** FastAPI (required)
 - **Models:**  
-  - All models used in your pipeline (LLMs, embedding models, or any others) are **open source**.  
-  - We recommend using the following models:  
+  - All models used in the pipeline (LLMs, embedding models, or any others) are **open source**.  
+  - We use the following models:  
     - **LLM:** TinyLlama-1.1B-Chat-v1.0
     - **Embedding model:** snowflake-arctic-embed-s
 
@@ -41,12 +41,15 @@ llm_case_study/
 
 - **Environment Setup:**  
   - For the docker image, we are using Python 3.10-slim
-  - For the host computer, we need to use any Python > 3.9
+  - For the host computer, we need to use any Python > 3.9 (go to https://www.python.org/downloads/)
   - We are using a docker container so there is no need spend time on the environment setup for the container. We have some assumptions though;
-		1. Docker is downloaded and installed, WSL is configured, Linux (Ubuntu) is installed on the Docker system.
+		1. Docker is downloaded and installed (https://www.docker.com/products/docker-desktop/), 
+		2. WSL is configured (https://docs.docker.com/desktop/features/wsl/)
+		3. Linux (Ubuntu) is installed on the Docker system.(https://docs.docker.com/engine/install/ubuntu/)
   - For the host computer (we are going to run the eval.py on our computer, not on the docker container), we also need to install several libraries
 		1. open a CMD (do not close it, we are going to use it in the other steps)
 		2. type; pip install google-genai
+				 pip install requests
 		3. extract the ZIP file I have sent as an attachment
   - Thanks to the YAML and Dockerfile configurations, we are just going to;
 		1. Open the docker application as admin

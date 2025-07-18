@@ -14,11 +14,10 @@ from langchain.schema import Document
 PDF_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'dr_voss_diary.pdf')
 MILVUS_DB_PATH = "milvus/milvus_data.db"
 PARENT_DOCS_STORE_PATH = "milvus/parent_docs.pkl" # File to store parent chunks
-COLLECTION_NAME = "veridia_retriever_chunks" # New name to avoid confusion
+COLLECTION_NAME = "veridia_retriever_chunks" 
 EMBEDDING_MODEL_NAME = "snowflake/snowflake-arctic-embed-s"
 EMBEDDING_DIM = 384  
 
-# --- YOUR MANUAL MILVUS FUNCTIONS (WITH ONE IMPORTANT MODIFICATION) ---
 
 def embed_texts(texts: List[str], model_name: str = EMBEDDING_MODEL_NAME) -> List[List[float]]:
     """Generates embeddings for a list of texts."""

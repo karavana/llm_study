@@ -16,11 +16,10 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 JUDGE_MODEL = "gemini-1.5-flash-latest" # This remains the model identifier
 judge_client = None
 
-# --- Initialize Google GenAI Client (New SDK Method) ---
+# --- Initialize Google GenAI Client ---
 # We do this once at the start of the script for efficiency.
 if GOOGLE_API_KEY:
     try:
-        # CHANGED: We now initialize a persistent client object from the new SDK.
         judge_client = genai.Client(api_key=GOOGLE_API_KEY)
         print(f"[✓] Successfully initialized Google GenAI client for judge model ({JUDGE_MODEL}).")
     except AttributeError:

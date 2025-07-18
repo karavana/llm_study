@@ -24,15 +24,6 @@ class QueryRequest(BaseModel):
 # === LOAD MODELS ON STARTUP ===
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    # The below snippet would have worked if we could have used llama-3.2-1B
-    import os
-    from huggingface_hub import login
-
-    token = os.getenv("HF_TOKEN")
-    if not token:
-        raise RuntimeError("HF_TOKEN not found in environment!")
-    login(token=token)"""
 
     # Load models on startup
     print("[*] Loading models and starting Milvus Lite...")
